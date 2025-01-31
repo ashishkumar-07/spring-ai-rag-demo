@@ -42,3 +42,4 @@ A Retrieval-Augmented Generation (RAG) application that indexes documents from f
 3. Run the application from inside the directory
    ```bash
    .\mvnw spring-boot:run
+   
