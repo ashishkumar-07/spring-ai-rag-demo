@@ -1,0 +1,21 @@
+sequenceDiagram
+    participant User as User/System
+    participant IndexService as Document Indexing Service
+    participant TokenSplitter as TokenTextSplitter
+    participant OpenAI as OpenAI Embedding Model
+    participant VectorStore as Vector Store
+
+    User->>IndexService: Submit Query
+    IndexService->>TokenSplitter: Split Query into Tokens (if needed)
+    TokenSplitter-->>IndexService: Tokens Created
+
+    IndexService->>OpenAI: Get Embedding for Query
+    OpenAI-->>IndexService: Embedding Retrieved
+
+    IndexService->>VectorStore: Search for Closest Embeddings (Query vs Document Chunks)
+    VectorStore-->>IndexService: Relevant Document Chunks Retrieved
+
+    IndexService->>OpenAI: Generate Response Using Retrieved Documents/Chunks
+    OpenAI-->>IndexService: Generated Response
+
+    IndexService->>User: Return Response

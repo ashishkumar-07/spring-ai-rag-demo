@@ -1,0 +1,43 @@
+sequenceDiagram
+    participant User as User/System
+    participant IndexService as Document Indexing Service
+    participant TikaReader as Apache TikaReader
+    participant TokenSplitter as TokenTextSplitter
+    participant OpenAI as OpenAI Embedding Model
+    participant MongoDB as MongoDB
+    participant VectorStore as Vector Store
+
+    User->>IndexService: Request Document Indexing
+    IndexService->>IndexService: Check if Document Processed (Hash)
+    alt If Processed
+        IndexService->>User: Return Success
+
+    end
+    alt If Document is new
+        IndexService->>TikaReader: Load Document
+        TikaReader-->>IndexService: Document Loaded
+        IndexService->>TokenSplitter: Split Document into Chunks
+        TokenSplitter-->>IndexService: Chunks Created
+        IndexService->>OpenAI: Get Embedding for each Chunk
+        OpenAI-->>IndexService: Embedding Retrieved
+        IndexService->>MongoDB: Save Embedding in MongoDB
+        IndexService->>MongoDB: Save Document in processed_docs collection
+        IndexService->>MongoDB: Save Chunk in processed_doc_chunks collection
+        IndexService->>User: Return Success
+    end
+
+    alt If Document is Updated
+        IndexService->>MongoDB: Delete Existing Document and Chunks
+        IndexService->>VectorStore: Delete Existing Embeddings
+        IndexService->>IndexService: Re-index Document
+        IndexService->>TikaReader: Load Document
+        TikaReader-->>IndexService: Document Loaded
+        IndexService->>TokenSplitter: Split Document into Chunks
+        TokenSplitter-->>IndexService: Chunks Created
+        IndexService->>OpenAI: Get Embedding for each Chunk
+        OpenAI-->>IndexService: Embedding Retrieved
+        IndexService->>MongoDB: Save New Embedding in MongoDB
+        IndexService->>MongoDB: Save Updated Document in processed_docs collection
+        IndexService->>MongoDB: Save Updated Chunk in processed_doc_chunks collection
+        IndexService->>User: Return Success
+    end
