@@ -41,11 +41,8 @@ public class MongoDBRagQueryService implements RagQueryService {
 
     @Override
     public Flux<String> generateResponseStream(String userPrompt, String systemPrompt, int topK) {
-        System.out.println("userPrompt ..................................."+userPrompt);
         var customContext = retrieveCustomContext(userPrompt, topK);
         var augmentedUserPrompt = augmentUserPrompt(userPrompt, customContext);
-
-        System.out.println("augmentedUserPrompt ..................................."+augmentedUserPrompt);
         return openAiService.generateResponseStream(augmentedUserPrompt, systemPrompt);
     }
 

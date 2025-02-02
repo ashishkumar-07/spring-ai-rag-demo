@@ -1,10 +1,9 @@
 package com.aarash.rag.service.impl;
 
-import com.aarash.rag.entity.ProcessedDocumentChunkDetail;
 import com.aarash.rag.entity.ProcessedDocumentDetail;
-import com.aarash.rag.repository.ProcessedDocumentChunkRepo;
 import com.aarash.rag.repository.ProcessedDocumentRepo;
 import com.aarash.rag.service.IndexingService;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -16,6 +15,9 @@ import org.springframework.ai.vectorstore.mongodb.atlas.MongoDBAtlasVectorStore;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
+import org.springframework.data.mongodb.core.MongoOperations;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
 import org.springframework.util.Assert;
 
@@ -31,16 +33,15 @@ public class MongoDBIndexingService implements IndexingService {
     private final TextSplitter textSplitter ;
     private final MongoDBAtlasVectorStore vectorStore;
     private final ProcessedDocumentRepo  processedDocumentRepo;
-    private final ProcessedDocumentChunkRepo  processedDocumentChunkRepo;
+    MongoOperations mongoOperations;
 
 
     private static final String CUSTOM_METADATA_KEY = "labels";
 
-    public MongoDBIndexingService(MongoDBAtlasVectorStore vectorStore, ProcessedDocumentRepo processedDocumentRepo, ProcessedDocumentChunkRepo processedDocumentChunkRepo) {
+    public MongoDBIndexingService(MongoDBAtlasVectorStore vectorStore, ProcessedDocumentRepo processedDocumentRepo) {
         this.textSplitter = new TokenTextSplitter();
         this.vectorStore = vectorStore;
         this.processedDocumentRepo = processedDocumentRepo;
-        this.processedDocumentChunkRepo = processedDocumentChunkRepo;
     }
 
 
@@ -68,14 +69,17 @@ public class MongoDBIndexingService implements IndexingService {
         }
     }
 
-    private List<Document> processDocument(Resource resource, List<String> labels) {
+    private List<Document> readAndEmbedDocument(Resource resource, String processedDocumentId, List<String> labels) {
         Assert.notNull(resource, "Resource must not be null!");
         Assert.isTrue( resource.exists(), "Resource must exist!");
 
         var reader = new TikaDocumentReader(resource);
         List<Document> docs = reader.read();
         docs.forEach(doc -> addCustomMetaData(doc, labels));
+
+        docs.forEach(doc -> doc.getMetadata().put("processedDocumentId", processedDocumentId));
         var splittedDocs =  textSplitter.apply(docs);
+
         vectorStore.add(splittedDocs);
         return splittedDocs;
     }
@@ -91,41 +95,37 @@ public class MongoDBIndexingService implements IndexingService {
         return DigestUtils.sha256Hex(original);
     }
 
+    @SneakyThrows
     private List<Document> indexDocument(Resource resource, List<String> labels) {
 
-        ProcessedDocumentDetail docToProcess = processedDocumentRepo.findBySourcePath(resource.getDescription())
-                .orElse(new ProcessedDocumentDetail(null, resource.getDescription(), StringUtils.EMPTY, LocalDateTime.now(), LocalDateTime.now()));
+        var docToProcess = processedDocumentRepo.findBySourcePath(resource.getURL().toString())
+                .orElse(new ProcessedDocumentDetail(null,
+                                                    resource.getURL().toString(),
+                                                    StringUtils.EMPTY,
+                                                    LocalDateTime.now(),
+                                                    LocalDateTime.now()));
 
         String inputDocHash = calculateHash(resource);
-
         if(!(resource instanceof UrlResource) && docToProcess.getHash().equals(inputDocHash)){
-            log.info("Document already processed: {}", resource.getDescription());
+            log.info("Document already processed: {}", resource.getURL().toString());
             return List.of();
         }
         log.info("Processing document: {}", resource.getDescription());
 
-        List<Document> splittedDocs = processDocument(resource, labels);
         docToProcess.setHash(inputDocHash);
         docToProcess.setLastProcessedAt(LocalDateTime.now());
         if(docToProcess.getProcessedDocumentId()!=null){
-            log.info("Deleting existing chunks for document: {}", docToProcess.getProcessedDocumentId());
-            deleteExistingChunks(docToProcess.getProcessedDocumentId());
+            log.info("Deleting existing embedding for document: {}", docToProcess.getProcessedDocumentId());
+            deleteOldEmbeddings(docToProcess.getProcessedDocumentId());
         }
 
-        ProcessedDocumentDetail savedDoc = processedDocumentRepo.save(docToProcess);
-
-        splittedDocs.forEach(chunk -> {
-            var chunkEntity = new ProcessedDocumentChunkDetail(chunk.getId(), savedDoc.getProcessedDocumentId());
-            processedDocumentChunkRepo.save(chunkEntity);
-        });
-
+        var savedDoc = processedDocumentRepo.save(docToProcess);
+        List<Document> splittedDocs = readAndEmbedDocument(resource, savedDoc.getProcessedDocumentId(), labels);
         return splittedDocs;
-
     }
 
-    private void deleteExistingChunks(String processedDocumentId) {
-        List<String> chunkIds = processedDocumentChunkRepo.findIdByProcessedDocumentId(processedDocumentId);
-        vectorStore.delete(chunkIds);
-        processedDocumentRepo.deleteAllById(chunkIds);
+    private void deleteOldEmbeddings(String processedDocumentId) {
+        Criteria criteria = Criteria.where("metadata.processedDocumentId").in(processedDocumentId);
+        mongoOperations.remove(Query.query(criteria), "vector_store");
     }
 }
