@@ -1,6 +1,6 @@
 spring:
   application:
-    name: spring-boot-redis
+    name: spring-ai-rag-app
   data:
     mongodb:
       uri: mongodb://myuser:password@localhost:27017/?directConnection=true
