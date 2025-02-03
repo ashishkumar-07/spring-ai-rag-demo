@@ -1,0 +1,106 @@
+version: '3.8'
+
+services:
+  mongo1:
+    image: mongo:latest
+    container_name: mongo1
+    ports:
+      - "27017:27017"
+    networks:
+      - mongoCluster
+    volumes:
+      - ./mongo-keyfile:/data/keyfile:ro
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=example
+    command: >
+      mongod --replSet myReplicaSet --bind_ip_all
+      --keyFile /data/keyfile --auth
+    healthcheck:
+      test: mongosh --eval "db.adminCommand('ping')" --quiet
+      interval: 5s
+      timeout: 30s
+      retries: 5
+
+  mongo2:
+    image: mongo:latest
+    container_name: mongo2
+    ports:
+      - "27018:27017"
+    networks:
+      - mongoCluster
+    volumes:
+      - ./mongo-keyfile:/data/keyfile:ro
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=example
+    command: >
+      mongod --replSet myReplicaSet --bind_ip_all
+      --keyFile /data/keyfile --auth
+    depends_on:
+      - mongo1
+    healthcheck:
+      test: mongosh --eval "db.adminCommand('ping')" --quiet
+      interval: 5s
+      timeout: 30s
+      retries: 5
+
+  mongo3:
+    image: mongo:latest
+    container_name: mongo3
+    ports:
+      - "27019:27017"
+    networks:
+      - mongoCluster
+    volumes:
+      - ./mongo-keyfile:/data/keyfile:ro
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=example
+    command: >
+      mongod --replSet myReplicaSet --bind_ip_all
+      --keyFile /data/keyfile --auth
+    depends_on:
+      - mongo1
+    healthcheck:
+      test: mongosh --eval "db.adminCommand('ping')" --quiet
+      interval: 5s
+      timeout: 30s
+      retries: 5
+
+  init:
+    image: mongo:latest
+    container_name: mongo_init
+    networks:
+      - mongoCluster
+    volumes:
+      - ./mongo-keyfile:/data/keyfile:ro
+    depends_on:
+      mongo1:
+        condition: service_healthy
+      mongo2:
+        condition: service_healthy
+      mongo3:
+        condition: service_healthy
+    command: >
+      bash -c "echo 'Initializing replica set...' &&
+      until mongosh --host mongo1 --eval 'rs.status().ok' --quiet; do
+        echo 'Waiting for mongo1 to be ready...';
+        sleep 5;
+      done &&
+      mongosh --host mongo1 --eval $$
+      'rs.initiate(
+        {
+          _id: \"myReplicaSet\",
+          members: [
+            {_id: 0, host: \"mongo1:27017\"},
+            {_id: 1, host: \"mongo2:27017\"},
+            {_id: 2, host: \"mongo3:27017\"}
+          ]
+        }
+      )' && 
+      echo 'Replica set initialized!'"
+
+networks:
+  mongoCluster:
+    name: mongoCluster

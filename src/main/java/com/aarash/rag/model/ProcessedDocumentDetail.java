@@ -1,4 +1,4 @@
-package com.aarash.rag.entity;
+package com.aarash.rag.model;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -6,9 +6,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
 
 @Document(collection = "processed_documents")
 @AllArgsConstructor

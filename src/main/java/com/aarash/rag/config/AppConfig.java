@@ -11,5 +11,4 @@ public class AppConfig {
     ChatClient openAiChatClient(ChatClient.Builder  builder) {
         return builder.defaultAdvisors(new SimpleLoggerAdvisor()).build();
     }
-
 }

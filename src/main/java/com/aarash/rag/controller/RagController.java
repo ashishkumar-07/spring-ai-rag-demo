@@ -1,17 +1,14 @@
 package com.aarash.rag.controller;
 
 import com.aarash.rag.dto.FileSystemIndexingRequest;
+import com.aarash.rag.dto.IndexingResponse;
 import com.aarash.rag.dto.QuestionRequest;
 import com.aarash.rag.dto.URLIndexingRequest;
 import com.aarash.rag.service.RagQueryService;
 import com.aarash.rag.service.impl.MongoDBIndexingService;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
-import org.springframework.ai.document.Document;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("api/v1/rag")
@@ -27,7 +24,7 @@ public class RagController {
 
 
     @PostMapping(path = "/indexing/filesystem")
-    public List<Document> indexDocumentFromFilesystem(
+    public IndexingResponse indexDocumentFromFilesystem(
             @RequestBody @Valid FileSystemIndexingRequest request) {
         var indexedDocuments = indexingService.indexDocumentFromFilesystem(
                 request.path(),
@@ -37,7 +34,7 @@ public class RagController {
     }
 
     @PostMapping(path = "/indexing/url")
-    public List<Document> indexDocumentFromURL(
+    public IndexingResponse indexDocumentFromURL(
             @RequestBody @Valid URLIndexingRequest request) {
         var indexedDocuments = indexingService.indexDocumentFromURL(
                 request.url(),
